@@ -1,0 +1,17 @@
+# Đầu ra biên dịch
+bin/
+bin-test/
+*.class
+sources.txt
+
+# Gói đóng
+*.jar
+
+# Eclipse (giữ lại .project, .classpath, .settings để mở dự án được ngay)
+.metadata/
+.recommenders/
+*.log
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
