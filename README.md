@@ -7,7 +7,7 @@ Bài tập lớn học phần AJP201 – Lập trình Java nâng cao (Khoa CNTT,
 - Đề bài: đề 38 (Nhóm E) trong `de-tai-45.pdf` của học phần.
 - Bảng chức năng: [docs/danh-sach-chuc-nang.md](docs/danh-sach-chuc-nang.md).
 - Sơ đồ (phân rã, kiến trúc tầng, lớp, tuần tự, lưu đồ): [docs/so-do/](docs/so-do/).
-- Java 21, chỉ thư viện chuẩn. JUnit 5 sẽ thêm ở bước sau, chỉ dùng cho test.
+- Java 21, chỉ thư viện chuẩn; thêm JUnit 5 (jar trong `lib/`), chỉ dùng cho test.
 
 **Tình trạng:** mới có bộ khung. Các lớp đã khai báo trường và chữ ký hàm; thân hàm ném `UnsupportedOperationException("CN-xx: chưa cài đặt")`, với CN-xx là mã chức năng trong bảng.
 
@@ -15,7 +15,7 @@ Bài tập lớn học phần AJP201 – Lập trình Java nâng cao (Khoa CNTT,
 
 ```
 .
-├── .project, .classpath, .settings/   dự án Eclipse: nguồn src/ và test/, đầu ra bin/ (test: bin-test/), JavaSE-21, mã hoá UTF-8
+├── .project, .classpath, .settings/   dự án Eclipse: nguồn src/ và test/, jar JUnit trong lib/, đầu ra bin/ (test: bin-test/), JavaSE-21, mã hoá UTF-8
 ├── .gitignore
 ├── README.md
 ├── CLAUDE.md                   quy ước làm việc với Claude
@@ -25,6 +25,8 @@ Bài tập lớn học phần AJP201 – Lập trình Java nâng cao (Khoa CNTT,
 ├── docs/
 │   ├── danh-sach-chuc-nang.md
 │   └── so-do/                  9 sơ đồ .drawio.png, mở sửa được bằng draw.io
+├── lib/
+│   └── junit-platform-console-standalone-1.13.4.jar   JUnit 5 (tải một lần, xem mục Chạy test)
 ├── src/
 │   └── de38_datchonhahang/
 │       ├── model/              dữ liệu dùng chung, không phụ thuộc tầng nào
@@ -49,7 +51,8 @@ Bài tập lớn học phần AJP201 – Lập trình Java nâng cao (Khoa CNTT,
 │       │   └── LoaiLenh.java           enum XEM / DAT / HUY
 │       └── giaodien/
 │           └── DatChoClient.java       máy khách console, có hàm main
-└── test/                       phép thử JUnit 5, cùng cây package với src/ (chưa có)
+└── test/                       phép thử JUnit 5, cùng cây package với src/
+    └── de38_datchonhahang/model/KetQuaTest.java   test mẫu: Ban, KetQua
 ```
 
 `bin/` là đầu ra khi biên dịch, không phải mã nguồn.
@@ -106,4 +109,45 @@ java -jar de38.jar data/ban.csv data/khung-gio.csv data/trang-thai.dat 5000
 
 ## Chạy test
 
-Thêm ở bước sau, cùng với JUnit 5.
+JUnit 5 dùng bản đóng gói sẵn `junit-platform-console-standalone` (dòng 1.x tương ứng JUnit 5.13), đặt trong `lib/`. Làm theo thứ tự: tải jar (một lần), biên dịch mã chính vào `bin/` (mục Biên dịch ở trên), biên dịch test vào `bin-test/`, rồi chạy.
+
+Tải jar một lần. PowerShell:
+
+```
+Invoke-WebRequest -Uri https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.13.4/junit-platform-console-standalone-1.13.4.jar -OutFile lib/junit-platform-console-standalone-1.13.4.jar
+```
+
+cmd, Linux, macOS (`curl` có sẵn trên Windows 10 trở lên):
+
+```
+curl -L -o lib/junit-platform-console-standalone-1.13.4.jar https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.13.4/junit-platform-console-standalone-1.13.4.jar
+```
+
+Biên dịch và chạy test. PowerShell:
+
+```
+javac --release 21 -encoding UTF-8 -cp "bin;lib/junit-platform-console-standalone-1.13.4.jar" -d bin-test (Get-ChildItem test -Recurse -Filter *.java).FullName
+java "-Dstdout.encoding=UTF-8" -jar lib/junit-platform-console-standalone-1.13.4.jar execute --class-path "bin;bin-test" --scan-class-path
+```
+
+cmd:
+
+```
+dir /s /b test\*.java > tests.txt
+javac --release 21 -encoding UTF-8 -cp "bin;lib/junit-platform-console-standalone-1.13.4.jar" -d bin-test @tests.txt
+java -Dstdout.encoding=UTF-8 -jar lib/junit-platform-console-standalone-1.13.4.jar execute --class-path "bin;bin-test" --scan-class-path
+```
+
+Linux / macOS (dấu phân cách classpath là `:`):
+
+```
+find test -name '*.java' > tests.txt
+javac --release 21 -encoding UTF-8 -cp "bin:lib/junit-platform-console-standalone-1.13.4.jar" -d bin-test @tests.txt
+java -jar lib/junit-platform-console-standalone-1.13.4.jar execute --class-path "bin:bin-test" --scan-class-path
+```
+
+Kết quả mong đợi với test mẫu: 3 test đạt, 0 test lỗi. Test mẫu chỉ kiểm tra `Ban` và `KetQua`; các chức năng khác còn là khung nên chưa có test.
+
+Trong Eclipse: chuột phải `KetQuaTest.java` → Run As → JUnit Test. Cần tải jar vào `lib/` trước, nếu không Eclipse báo thiếu thư viện.
+
+Muốn dùng bản JUnit mới hơn thì đổi số phiên bản trong tên tệp jar, trong `.classpath` và trong các lệnh trên (dòng 1.x là JUnit 5; dòng 6.x là JUnit 6).

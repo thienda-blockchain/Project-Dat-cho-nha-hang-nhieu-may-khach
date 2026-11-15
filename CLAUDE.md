@@ -89,7 +89,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Đọc `KetQua` bằng switch biểu thức khớp mẫu (slide chương 6, cần Java 21).
 
 ### Luật code
-- Java 21, biên dịch với `--release 21` (máy có JDK 25 vẫn cho ra mã Java 21). Không thêm thư viện nào ngoài JUnit 5 (chỉ dùng cho test, trong `test/`).
+- Java 21, biên dịch với `--release 21` (máy có JDK 25 vẫn cho ra mã Java 21). Không thêm thư viện nào ngoài JUnit 5 (`lib/junit-platform-console-standalone-1.13.4.jar`, chỉ dùng cho code trong `test/`).
 - Chỉ dùng kỹ thuật có trong slide các chương đã học: `..\chuong-01-slide.pdf` … `..\chuong-06-slide.pdf`. Cần thứ ngoài slide (ví dụ `ScheduledExecutorService`, `AtomicInteger`, `Semaphore`, `String.split`) thì hỏi trước.
 - Đóng tệp, socket, luồng bằng try-with-resources. Không dùng biến toàn cục (trường `static` thay đổi được); hằng `static final` thì được.
 
@@ -119,4 +119,21 @@ java -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -cp bin de38_datchonhahang.
 java -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -cp bin de38_datchonhahang.giaodien.DatChoClient localhost 5000
 ```
 
-Lệnh chạy test thêm khi có JUnit 5; khi đó cập nhật cả `README.md` và mục này.
+Chạy test (sau khi đã biên dịch mã chính vào `bin/`; tải jar một lần, lệnh tải xem `README.md`):
+
+PowerShell:
+
+```
+javac --release 21 -encoding UTF-8 -cp "bin;lib/junit-platform-console-standalone-1.13.4.jar" -d bin-test (Get-ChildItem test -Recurse -Filter *.java).FullName
+java "-Dstdout.encoding=UTF-8" -jar lib/junit-platform-console-standalone-1.13.4.jar execute --class-path "bin;bin-test" --scan-class-path
+```
+
+cmd:
+
+```
+dir /s /b test\*.java > tests.txt
+javac --release 21 -encoding UTF-8 -cp "bin;lib/junit-platform-console-standalone-1.13.4.jar" -d bin-test @tests.txt
+java -Dstdout.encoding=UTF-8 -jar lib/junit-platform-console-standalone-1.13.4.jar execute --class-path "bin;bin-test" --scan-class-path
+```
+
+Đổi lệnh nào thì cập nhật cả `README.md` và mục này.
