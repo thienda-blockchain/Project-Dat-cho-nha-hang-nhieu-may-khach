@@ -100,9 +100,69 @@ public class DatChoService {
         return List.copyOf(ketQua);
     }
 
+    // CN-07: kiểm tra điều kiện và thực hiện đặt bàn.
     public KetQua<DatCho> dat(String maBan, KhungGio gio, int soKhach, String tenKhach) {
-        throw new UnsupportedOperationException("CN-07: chưa cài đặt");
+
+        // Bước 1: Kiểm tra tham số đầu vào.
+        if (maBan == null || maBan.isBlank()
+                || gio == null
+                || soKhach <= 0
+                || tenKhach == null || tenKhach.isBlank()) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.SAI_THAM_SO,
+                    "Thông tin đặt bàn không hợp lệ"
+            );
+        }
+
+        // Bước 2: Kiểm tra bàn có tồn tại trong cấu hình.
+        Ban ban = kho.timBan(maBan).orElse(null);
+
+        if (ban == null) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.BAN_KHONG_TON_TAI,
+                    "Bàn không tồn tại: " + maBan
+            );
+        }
+
+        // Bước 3: Kiểm tra khung giờ có tồn tại.
+        if (!kho.coKhungGio(gio)) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.GIO_KHONG_TON_TAI,
+                    "Khung giờ không tồn tại: " + gio.gioBatDau()
+            );
+        }
+
+        // Bước 4: Kiểm tra số khách không vượt sức chứa của bàn.
+        if (soKhach > ban.sucChua()) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.QUA_SUC_CHUA,
+                    "Số khách vượt quá sức chứa của bàn " + maBan
+            );
+        }
+
+        // Bước 5: Kiểm tra bàn đã được đặt trong khung giờ này chưa.
+        if (kho.banBan(gio).contains(ban)) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.BAN_BAN,
+                    "Bàn đã được đặt trong khung giờ này: " + maBan
+            );
+        }
+
+        // Bước 6: Sinh mã, tạo lượt đặt và lưu vào kho trạng thái.
+        DatCho datCho = new DatCho(
+                kho.sinhMaDat(),
+                tenKhach,
+                ban,
+                gio,
+                soKhach
+        );
+
+        kho.them(datCho);
+
+        // Trả về kết quả đặt bàn thành công.
+        return new KetQua.ThanhCong<>(datCho);
     }
+
 
     public KetQua<DatCho> huy(String maDat, String tenKhach) {
         throw new UnsupportedOperationException("CN-08: chưa cài đặt");

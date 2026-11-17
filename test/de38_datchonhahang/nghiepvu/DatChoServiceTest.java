@@ -151,4 +151,158 @@ class DatChoServiceTest {
         assertTrue(dong.get(3).contains("B03"));
         assertTrue(dong.get(3).contains("TRONG"));
     }
+
+
+    // CN-07: Tham số không hợp lệ phải trả về SAI_THAM_SO.
+    @Test
+    void datThamSoKhongHopLeTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.dat(
+                null, new KhungGio(8), 2, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.SAI_THAM_SO, thatBai.maLoi());
+    }
+
+    // CN-07: Mã bàn không có trong cấu hình.
+    @Test
+    void datBanKhongTonTaiTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B99", new KhungGio(8), 2, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.BAN_KHONG_TON_TAI, thatBai.maLoi());
+    }
+
+    // CN-07: Khung giờ không có trong cấu hình.
+    @Test
+    void datKhungGioKhongTonTaiTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B01", new KhungGio(10), 2, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.GIO_KHONG_TON_TAI, thatBai.maLoi());
+    }
+
+    // CN-07: Số khách bằng 0 không hợp lệ.
+    @Test
+    void datSoKhachBangKhongTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B01", new KhungGio(8), 0, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.SAI_THAM_SO, thatBai.maLoi());
+    }
+
+    // CN-07: Số khách vượt sức chứa bàn.
+    @Test
+    void datVuotSucChuaTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B01", new KhungGio(8), 5, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.QUA_SUC_CHUA, thatBai.maLoi());
+    }
+
+    // CN-07: Không được đặt lại bàn đã bận trong cùng khung giờ.
+    @Test
+    void datBanDaBanTraVeThatBai() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B01", new KhungGio(8), 2, "Tran Van B"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.BAN_BAN, thatBai.maLoi());
+    }
+
+    // CN-07: Đặt bàn hợp lệ phải tạo và lưu đặt chỗ.
+    @Test
+    void datHopLeTraVeThanhCongVaLuuDatCho() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> ketQua = service.dat(
+                "B01", new KhungGio(8), 3, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        DatCho datCho = ((KetQua.ThanhCong<DatCho>) ketQua).giaTri();
+
+        assertEquals("Nguyen Van A", datCho.tenKhach());
+        assertEquals("B01", datCho.ban().ma());
+        assertEquals(8, datCho.gio().gioBatDau());
+        assertEquals(3, datCho.soKhach());
+
+        assertTrue(kho.timDat(datCho.maDat()).isPresent());
+        assertTrue(kho.banBan(new KhungGio(8)).contains(new Ban("B01", 4)));
+    }
+
+    // CN-07: Cùng một bàn có thể được đặt ở hai khung giờ khác nhau.
+    @Test
+    void datCungBanKhacKhungGioVanThanhCong() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(
+                new KhungGio(8),
+                new KhungGio(12)
+        );
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> ketQua1 = service.dat(
+                "B01", new KhungGio(8), 2, "Nguyen Van A"
+        );
+
+        KetQua<DatCho> ketQua2 = service.dat(
+                "B01", new KhungGio(12), 3, "Tran Van B"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua1);
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua2);
+
+        assertEquals(2, kho.chupDatCho().size());
+    }
+
 }
