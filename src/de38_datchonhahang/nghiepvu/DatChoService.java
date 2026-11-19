@@ -8,6 +8,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.TreeMap;
 
 import de38_datchonhahang.luutru.LuuTruTrangThai;
 import de38_datchonhahang.model.Ban;
@@ -51,22 +53,46 @@ public class DatChoService {
 
     // CN-06: xem sơ đồ bàn của tất cả khung giờ theo thứ tự tăng dần.
     public KetQua<List<String>> xemTatCa() {
-        List<String> ketQua = kho.cacKhungGio().stream()
-                .sorted()
-                .map(this::taoDongXem)
-                .flatMap(List::stream)
-                .toList();
+        List<String> ketQua = new ArrayList<>(
+                kho.cacKhungGio().stream()
+                        .sorted()
+                        .map(this::taoDongXem)
+                        .flatMap(List::stream)
+                        .toList()
+        );
 
-        return new KetQua.ThanhCong<>(ketQua);
+        // Tính tỷ lệ lấp đầy tổng thể trong cả ngày.
+        KetQua<Double> ketQuaTyLeCaNgay = tyLeLapDayCaNgay();
+
+        if (ketQuaTyLeCaNgay instanceof KetQua.ThanhCong<?> thanhCong) {
+            double tyLeCaNgay = (Double) thanhCong.giaTri();
+
+            ketQua.add(String.format(
+                    Locale.ROOT,
+                    "Tỷ lệ lấp đầy cả ngày: %.2f%%",
+                    tyLeCaNgay
+            ));
+        }
+
+        return new KetQua.ThanhCong<>(List.copyOf(ketQua));
     }
 
+    
     // Tạo các dòng hiển thị cho một khung giờ.
     private List<String> taoDongXem(KhungGio gio) {
-        // Lấy bản sao danh sách bàn đã đặt để tránh duyệt trực tiếp Set đang thay đổi.
+        // Lấy bản sao danh sách bàn đã đặt.
         Set<Ban> banDaDat = kho.banBan(gio);
 
+        // Lấy danh sách bàn đã cấu hình.
+        List<Ban> tatCaBan = kho.tatCaBan();
+
+        // Tính tỷ lệ lấp đầy từ cùng bản sao trạng thái bàn.
+        double tyLeLapDay = tatCaBan.isEmpty()
+                ? 0.0
+                : banDaDat.size() * 100.0 / tatCaBan.size();
+
         // Sắp xếp bàn theo mã và tạo nội dung từng dòng.
-        String cacDongBan = kho.tatCaBan().stream()
+        String cacDongBan = tatCaBan.stream()
                 .sorted(Comparator.comparing(Ban::ma))
                 .map(ban -> {
                     TrangThaiBan trangThai = banDaDat.contains(ban)
@@ -84,21 +110,30 @@ public class DatChoService {
                 })
                 .collect(Collectors.joining("\n"));
 
-        // Dòng đầu tiên là tên khung giờ.
         List<String> ketQua = new ArrayList<>();
+
+        // Dòng đầu tiên là tên khung giờ.
         ketQua.add(String.format(
                 Locale.ROOT,
                 "Khung giờ: %02d:00",
                 gio.gioBatDau()
         ));
 
-        // Thêm các dòng thông tin bàn nếu có bàn được cấu hình.
+        // Thêm thông tin từng bàn.
         if (!cacDongBan.isEmpty()) {
             ketQua.addAll(List.of(cacDongBan.split("\n")));
         }
 
+        // Thêm tỷ lệ lấp đầy.
+        ketQua.add(String.format(
+                Locale.ROOT,
+                "Tỷ lệ lấp đầy: %.2f%%",
+                tyLeLapDay
+        ));
+
         return List.copyOf(ketQua);
     }
+
 
     // CN-07: kiểm tra điều kiện và thực hiện đặt bàn.
     public KetQua<DatCho> dat(String maBan, KhungGio gio, int soKhach, String tenKhach) {
@@ -209,10 +244,68 @@ public class DatChoService {
     }
 
     public KetQua<Double> tyLeLapDay(KhungGio gio) {
-        throw new UnsupportedOperationException("CN-09: chưa cài đặt");
+        if (gio == null) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.SAI_THAM_SO,
+                    "Khung giờ không được null"
+            );
+        }
+
+        if (!kho.coKhungGio(gio)) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.GIO_KHONG_TON_TAI,
+                    "Khung giờ không tồn tại"
+            );
+        }
+
+        int tongSoBan = kho.tatCaBan().size();
+
+        if (tongSoBan == 0) {
+            return new KetQua.ThanhCong<>(0.0);
+        }
+
+        // Lấy bản sao trạng thái bàn đã đặt.
+        Set<Ban> banDaDat = kho.banBan(gio);
+
+        // Dùng Stream filter và count để đếm bàn đã đặt.
+        long soBanDaDat = kho.tatCaBan().stream()
+                .filter(banDaDat::contains)
+                .count();
+
+        double tyLe = soBanDaDat * 100.0 / tongSoBan;
+
+        return new KetQua.ThanhCong<>(tyLe);
     }
 
     public KetQua<Double> tyLeLapDayCaNgay() {
-        throw new UnsupportedOperationException("CN-09: chưa cài đặt");
+        int tongSoBan = kho.tatCaBan().size();
+        int tongSoKhungGio = kho.cacKhungGio().size();
+
+        if (tongSoBan == 0 || tongSoKhungGio == 0) {
+            return new KetQua.ThanhCong<>(0.0);
+        }
+
+        // Chụp danh sách đặt chỗ để thống kê.
+        List<DatCho> danhSachDat = kho.chupDatCho();
+
+        // Thống kê số bàn được đặt theo từng khung giờ.
+        Map<KhungGio, Long> soBanDaDatTheoGio = danhSachDat.stream()
+                .collect(Collectors.groupingBy(
+                        DatCho::gio,
+                        TreeMap::new,
+                        Collectors.counting()
+                ));
+
+        // Tổng số lượt bàn đã được đặt trong cả ngày.
+        long tongSoLuotBanDaDat = soBanDaDatTheoGio.values().stream()
+                .mapToLong(Long::longValue)
+                .sum();
+
+        // Tổng số lượt bàn có thể được đặt trong cả ngày.
+        double tongSoLuotBanToiDa = (double) tongSoBan * tongSoKhungGio;
+
+        double tyLe = tongSoLuotBanDaDat * 100.0 / tongSoLuotBanToiDa;
+
+        return new KetQua.ThanhCong<>(tyLe);
     }
 }

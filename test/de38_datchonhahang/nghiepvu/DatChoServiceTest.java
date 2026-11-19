@@ -55,11 +55,12 @@ class DatChoServiceTest {
         @SuppressWarnings("unchecked")
         List<String> dong = ((KetQua.ThanhCong<List<String>>) ketQua).giaTri();
 
-        assertEquals(4, dong.size());
+        assertEquals(5, dong.size());
         assertEquals("Khung giờ: 08:00", dong.get(0));
         assertTrue(dong.stream().anyMatch(s -> s.contains("B01")));
         assertTrue(dong.stream().anyMatch(s -> s.contains("B02")));
         assertTrue(dong.stream().anyMatch(s -> s.contains("B03")));
+        assertEquals("Tỷ lệ lấp đầy: 0.00%", dong.get(4));
     }
 
     @Test
@@ -73,9 +74,18 @@ class DatChoServiceTest {
         @SuppressWarnings("unchecked")
         List<String> dong = ((KetQua.ThanhCong<List<String>>) ketQua).giaTri();
 
+        assertEquals(11, dong.size());
+
+        // Khung giờ thứ nhất.
         assertEquals("Khung giờ: 08:00", dong.get(0));
-        assertEquals("Khung giờ: 12:00", dong.get(4));
-        assertEquals(8, dong.size());
+        assertEquals("Tỷ lệ lấp đầy: 0.00%", dong.get(4));
+
+        // Khung giờ thứ hai.
+        assertEquals("Khung giờ: 12:00", dong.get(5));
+        assertEquals("Tỷ lệ lấp đầy: 0.00%", dong.get(9));
+
+        // Tỷ lệ lấp đầy tổng thể cả ngày.
+        assertEquals("Tỷ lệ lấp đầy cả ngày: 0.00%", dong.get(10));
     }
 
     @Test
@@ -452,6 +462,262 @@ class DatChoServiceTest {
 
         KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
         assertEquals(MaLoi.SAI_THAM_SO, thatBai.maLoi());
+    }
+
+    // CN-09: Một trong ba bàn được đặt tương ứng tỷ lệ lấp đầy 33,33%.
+    @Test
+    void tyLeLapDayMotKhungGioBangMotPhanBa() {
+        List<Ban> dsBan = List.of(
+                new Ban("B01", 4),
+                new Ban("B02", 4),
+                new Ban("B03", 4)
+        );
+
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<Double> ketQua = service.tyLeLapDay(new KhungGio(8));
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(100.0 / 3.0, tyLe, 0.0001);
+    }
+
+    // CN-09: Hai trong ba bàn được đặt tương ứng tỷ lệ lấp đầy 66,67%.
+    @Test
+    void tyLeLapDayHaiKhungGioBangHaiPhanBa() {
+        List<Ban> dsBan = List.of(
+                new Ban("B01", 4),
+                new Ban("B02", 4),
+                new Ban("B03", 4)
+        );
+
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        kho.them(new DatCho(
+                "DC02", "Tran Van B",
+                new Ban("B02", 4), new KhungGio(8), 3
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<Double> ketQua = service.tyLeLapDay(new KhungGio(8));
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(200.0 / 3.0, tyLe, 0.0001);
+    }
+
+    // CN-09: Khung giờ không tồn tại phải trả về GIO_KHONG_TON_TAI.
+    @Test
+    void tyLeLapDayKhungGioKhongTonTaiTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<Double> ketQua = service.tyLeLapDay(new KhungGio(10));
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+
+        assertEquals(MaLoi.GIO_KHONG_TON_TAI, thatBai.maLoi());
+    }
+
+    // CN-09: Không có bàn cấu hình thì tỷ lệ lấp đầy bằng 0%.
+    @Test
+    void tyLeLapDayKhongCoBanTraVeKhongPhanTram() {
+        KhoTrangThai kho = new KhoTrangThai(
+                List.of(),
+                List.of(new KhungGio(8))
+        );
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<Double> ketQua = service.tyLeLapDay(new KhungGio(8));
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(0.0, tyLe);
+    }
+
+    // CN-09: Tỷ lệ cả ngày được tính trên tổng bàn và tổng khung giờ.
+    @Test
+    void tyLeLapDayCaNgayTinhDungTyLe() {
+        List<Ban> dsBan = List.of(
+                new Ban("B01", 4),
+                new Ban("B02", 4),
+                new Ban("B03", 4)
+        );
+
+        List<KhungGio> dsGio = List.of(
+                new KhungGio(8),
+                new KhungGio(12)
+        );
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        kho.them(new DatCho(
+                "DC02", "Tran Van B",
+                new Ban("B02", 4), new KhungGio(8), 3
+        ));
+
+        kho.them(new DatCho(
+                "DC03", "Le Van C",
+                new Ban("B03", 4), new KhungGio(12), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<Double> ketQua = service.tyLeLapDayCaNgay();
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(50.0, tyLe, 0.0001);
+    }
+
+    // CN-09: XEM tất cả phải hiển thị đúng tỷ lệ lấp đầy cả ngày.
+    @Test
+    void xemTatCaHienThiDungTyLeLapDayCaNgay() {
+        List<Ban> dsBan = List.of(
+                new Ban("B01", 4),
+                new Ban("B02", 4),
+                new Ban("B03", 4)
+        );
+
+        List<KhungGio> dsGio = List.of(
+                new KhungGio(8),
+                new KhungGio(12)
+        );
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        kho.them(new DatCho(
+                "DC02", "Tran Van B",
+                new Ban("B02", 4), new KhungGio(8), 3
+        ));
+
+        kho.them(new DatCho(
+                "DC03", "Le Van C",
+                new Ban("B03", 4), new KhungGio(12), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<List<String>> ketQua = service.xemTatCa();
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        List<String> dong =
+                ((KetQua.ThanhCong<List<String>>) ketQua).giaTri();
+
+        assertEquals(
+                "Tỷ lệ lấp đầy: 66.67%",
+                dong.get(4)
+        );
+
+        assertEquals(
+                "Tỷ lệ lấp đầy: 33.33%",
+                dong.get(9)
+        );
+
+        assertEquals(
+                "Tỷ lệ lấp đầy cả ngày: 50.00%",
+                dong.get(10)
+        );
+    }
+    // CN-09: Không có khung giờ cấu hình thì tỷ lệ cả ngày bằng 0%.
+    @Test
+    void tyLeLapDayCaNgayKhongCoKhungGioTraVeKhongPhanTram() {
+        KhoTrangThai kho = new KhoTrangThai(
+                List.of(new Ban("B01", 4)),
+                List.of()
+        );
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<Double> ketQua = service.tyLeLapDayCaNgay();
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(0.0, tyLe);
+    }
+
+    // CN-09: Sau khi hủy đặt chỗ, tỷ lệ lấp đầy phải giảm.
+    @Test
+    void tyLeLapDayGiamSauKhiHuyDatCho() {
+        List<Ban> dsBan = List.of(
+                new Ban("B01", 4),
+                new Ban("B02", 4),
+                new Ban("B03", 4)
+        );
+
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        double truocKhiHuy = ((KetQua.ThanhCong<Double>)
+                service.tyLeLapDay(new KhungGio(8))).giaTri();
+
+        KetQua<DatCho> ketQuaHuy = service.huy("DC01", "Nguyen Van A");
+        assertInstanceOf(KetQua.ThanhCong.class, ketQuaHuy);
+
+        double sauKhiHuy = ((KetQua.ThanhCong<Double>)
+                service.tyLeLapDay(new KhungGio(8))).giaTri();
+
+        assertEquals(100.0 / 3.0, truocKhiHuy, 0.0001);
+        assertEquals(0.0, sauKhiHuy);
+    }
+
+    // CN-09: Chưa có đặt chỗ nào thì tỷ lệ lấp đầy bằng 0%.
+    @Test
+    void tyLeLapDayCaNgayChuaCoDatChoTraVeKhongPhanTram() {
+        DatChoService service = taoService();
+
+        KetQua<Double> ketQua = service.tyLeLapDayCaNgay();
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        double tyLe = ((KetQua.ThanhCong<Double>) ketQua).giaTri();
+
+        assertEquals(0.0, tyLe);
     }
 
 }
