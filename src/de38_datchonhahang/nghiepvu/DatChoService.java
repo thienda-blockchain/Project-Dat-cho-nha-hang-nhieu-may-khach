@@ -164,8 +164,48 @@ public class DatChoService {
     }
 
 
+    // CN-08: huỷ đặt chỗ theo mã đặt và xác minh tên khách.
     public KetQua<DatCho> huy(String maDat, String tenKhach) {
-        throw new UnsupportedOperationException("CN-08: chưa cài đặt");
+
+        // Bước 1: Kiểm tra tham số đầu vào.
+        if (maDat == null || maDat.isBlank()
+                || tenKhach == null || tenKhach.isBlank()) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.SAI_THAM_SO,
+                    "Mã đặt chỗ và tên khách không được để trống"
+            );
+        }
+
+        // Bước 2: Tìm đặt chỗ theo mã.
+        DatCho datCho = kho.timDat(maDat).orElse(null);
+
+        if (datCho == null) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.DAT_KHONG_TON_TAI,
+                    "Đặt chỗ không tồn tại: " + maDat
+            );
+        }
+
+        // Bước 3: Xác minh tên khách.
+        if (!datCho.tenKhach().equals(tenKhach)) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.SAI_THAM_SO,
+                    "Tên khách không khớp với thông tin đặt chỗ"
+            );
+        }
+
+        // Bước 4: Huỷ đặt chỗ và giải phóng bàn.
+        DatCho datDaHuy = kho.go(maDat).orElse(null);
+
+        if (datDaHuy == null) {
+            return new KetQua.ThatBai<>(
+                    MaLoi.DAT_KHONG_TON_TAI,
+                    "Đặt chỗ không còn tồn tại: " + maDat
+            );
+        }
+
+        // Bước 5: Trả về đặt chỗ đã huỷ.
+        return new KetQua.ThanhCong<>(datDaHuy);
     }
 
     public KetQua<Double> tyLeLapDay(KhungGio gio) {

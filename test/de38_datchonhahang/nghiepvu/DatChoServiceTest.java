@@ -305,4 +305,153 @@ class DatChoServiceTest {
         assertEquals(2, kho.chupDatCho().size());
     }
 
+    // CN-08: Mã đặt không tồn tại phải trả về DAT_KHONG_TON_TAI.
+    @Test
+    void huyMaDatKhongTonTaiTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.huy(
+                "DC999", "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.DAT_KHONG_TON_TAI, thatBai.maLoi());
+    }
+
+    // CN-08: Khách khác không được huỷ đặt chỗ.
+    @Test
+    void huySaiTenKhachTraVeThatBai() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> ketQua = service.huy(
+                "DC01", "Tran Van B"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.SAI_THAM_SO, thatBai.maLoi());
+
+        assertTrue(kho.timDat("DC01").isPresent());
+        assertTrue(kho.banBan(new KhungGio(8)).contains(new Ban("B01", 4)));
+    }
+
+    // CN-08: Huỷ lần thứ hai cùng mã phải báo lỗi.
+    @Test
+    void huyHaiLanCungMaDatLanThuHaiThatBai() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        kho.them(new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        ));
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> lanThuNhat = service.huy(
+                "DC01", "Nguyen Van A"
+        );
+
+        KetQua<DatCho> lanThuHai = service.huy(
+                "DC01", "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, lanThuNhat);
+        assertInstanceOf(KetQua.ThatBai.class, lanThuHai);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) lanThuHai;
+        assertEquals(MaLoi.DAT_KHONG_TON_TAI, thatBai.maLoi());
+    }
+
+    // CN-08: Huỷ thành công phải xoá đặt chỗ khỏi kho.
+    @Test
+    void huyHopLeTraVeThanhCongVaXoaDatCho() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+
+        DatCho datBanDau = new DatCho(
+                "DC01", "Nguyen Van A",
+                new Ban("B01", 4), new KhungGio(8), 2
+        );
+
+        kho.them(datBanDau);
+
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> ketQua = service.huy(
+                "DC01", "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, ketQua);
+
+        DatCho datDaHuy = ((KetQua.ThanhCong<DatCho>) ketQua).giaTri();
+
+        assertEquals(datBanDau, datDaHuy);
+        assertTrue(kho.timDat("DC01").isEmpty());
+        assertTrue(kho.banBan(new KhungGio(8)).isEmpty());
+    }
+
+    // CN-08: Bàn sau khi huỷ phải được đặt lại thành công.
+    @Test
+    void huyThanhCongCoTheDatLaiBanNgayLapTuc() {
+        List<Ban> dsBan = List.of(new Ban("B01", 4));
+        List<KhungGio> dsGio = List.of(new KhungGio(8));
+
+        KhoTrangThai kho = new KhoTrangThai(dsBan, dsGio);
+        DatChoService service = new DatChoService(kho, null, null);
+
+        KetQua<DatCho> datLanDau = service.dat(
+                "B01", new KhungGio(8), 2, "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, datLanDau);
+
+        DatCho datCho = ((KetQua.ThanhCong<DatCho>) datLanDau).giaTri();
+
+        KetQua<DatCho> huy = service.huy(
+                datCho.maDat(), "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, huy);
+
+        KetQua<DatCho> datLai = service.dat(
+                "B01", new KhungGio(8), 3, "Tran Van B"
+        );
+
+        assertInstanceOf(KetQua.ThanhCong.class, datLai);
+        assertEquals(1, kho.chupDatCho().size());
+    }
+
+    // CN-08: Mã đặt và tên khách không hợp lệ phải trả về SAI_THAM_SO.
+    @Test
+    void huyThamSoKhongHopLeTraVeThatBai() {
+        DatChoService service = taoService();
+
+        KetQua<DatCho> ketQua = service.huy(
+                " ", "Nguyen Van A"
+        );
+
+        assertInstanceOf(KetQua.ThatBai.class, ketQua);
+
+        KetQua.ThatBai<?> thatBai = (KetQua.ThatBai<?>) ketQua;
+        assertEquals(MaLoi.SAI_THAM_SO, thatBai.maLoi());
+    }
+
 }
