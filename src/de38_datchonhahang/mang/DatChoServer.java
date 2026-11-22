@@ -1,18 +1,13 @@
 package de38_datchonhahang.mang;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 import de38_datchonhahang.luutru.CauHinhLoader;
 import de38_datchonhahang.luutru.LuuTruException;
@@ -32,11 +27,13 @@ public class DatChoServer {
     private final int cong;
     private final ExecutorService pool;
     private final BoXuLyLenh boXuLy;
+    private volatile boolean dangChay = true;
+    private volatile ServerSocket serverSocket;
 
     public DatChoServer(int cong, BoXuLyLenh boXuLy) {
         this.cong = cong;
         this.boXuLy = boXuLy;
-        this.pool = Executors.newFixedThreadPool(SO_LUONG_LUONG); // CN-13 sẽ dùng
+        this.pool = Executors.newFixedThreadPool(SO_LUONG_LUONG);
     }
 
     // args: <tệp bàn> <tệp khung giờ> <tệp trạng thái> [cổng]
@@ -61,24 +58,17 @@ public class DatChoServer {
             LuuTruTrangThai luuTru = new LuuTruTrangThai(args[2]);
             kho.khoiPhuc(luuTru.nap());
             DatChoService service = new DatChoService(kho, new KhoaBan(cacBan), luuTru);
-            new DatChoServer(cong, new BoXuLyLenh(service)).phucVuMotKhach();
+            new DatChoServer(cong, new BoXuLyLenh(service)).chay();
         } catch (LuuTruException e) {
             System.err.println("Lỗi đọc tệp: " + e.getMessage());
         }
     }
 
-    // CN-11: nhận đúng một khách rồi phục vụ tới khi khách đóng kết nối. CN-13 sẽ thay bằng chay().
+    // CN-11: nhận đúng một khách rồi phục vụ tới khi khách đóng kết nối.
     public void phucVuMotKhach() {
         try (ServerSocket server = new ServerSocket(cong);
-                Socket socket = server.accept();
-                BufferedReader vao = new BufferedReader(new InputStreamReader(socket.getInputStream(), UTF_8));
-                PrintWriter ra = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), UTF_8), true)) {
-            String dong;
-            while ((dong = vao.readLine()) != null) {
-                for (String phanHoi : boXuLy.xuLy(dong)) {
-                    ra.println(phanHoi);
-                }
-            }
+                Socket socket = server.accept()) {
+            new ClientHandler(socket, boXuLy).run();
         } catch (BindException e) {
             System.err.println("Cổng " + cong + " đang bận, hãy đóng chương trình đang dùng cổng này hoặc chọn cổng khác.");
         } catch (IOException e) {
@@ -86,11 +76,41 @@ public class DatChoServer {
         }
     }
 
+    // CN-13: vòng accept vô hạn, mỗi khách một ClientHandler chạy trên bể luồng.
     public void chay() {
-        throw new UnsupportedOperationException("CN-13: chưa cài đặt");
+        try (ServerSocket server = new ServerSocket(cong)) {
+            serverSocket = server;
+            while (dangChay) {
+                Socket socket = server.accept();
+                try {
+                    pool.execute(new ClientHandler(socket, boXuLy));
+                } catch (RejectedExecutionException e) { // bể đã đóng do dung()
+                    socket.close();
+                    break;
+                }
+            }
+        } catch (BindException e) {
+            System.err.println("Cổng " + cong + " đang bận, hãy đóng chương trình đang dùng cổng này hoặc chọn cổng khác.");
+        } catch (IOException e) {
+            if (dangChay) { // dung() đóng ServerSocket làm accept ném lỗi: đó là dừng bình thường
+                System.err.println("Lỗi máy chủ: " + e.getMessage());
+            }
+        } finally {
+            pool.shutdown();
+        }
     }
 
+    // Dừng sạch: hạ cờ, đóng ServerSocket để accept thoát, không nhận thêm việc cho bể.
     public void dung() {
-        throw new UnsupportedOperationException("CN-13: chưa cài đặt");
+        dangChay = false;
+        ServerSocket server = serverSocket;
+        if (server != null) {
+            try {
+                server.close();
+            } catch (IOException e) {
+                System.err.println("Lỗi khi đóng cổng: " + e.getMessage());
+            }
+        }
+        pool.shutdown();
     }
 }
